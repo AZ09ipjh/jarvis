@@ -1,0 +1,329 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <title>Jarvis Futuriste - Assistant d'Études</title>
+  <!-- Police futuriste -->
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron&display=swap" rel="stylesheet">
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      background: linear-gradient(135deg, #0f0c29, #302b63, #24243e);
+      font-family: 'Orbitron', sans-serif;
+      color: #00ffcc;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      min-height: 100vh;
+    }
+    .header {
+      margin-top: 40px;
+      text-align: center;
+      text-shadow: 0 0 20px #ff00ff;
+    }
+    .header h1 {
+      font-size: 2.8rem;
+      margin-bottom: 20px;
+    }
+    .nav-buttons {
+      margin: 20px;
+    }
+    .nav-buttons button {
+      background: #00ffcc;
+      color: #000;
+      border: none;
+      padding: 10px 20px;
+      margin: 0 5px;
+      border-radius: 30px;
+      font-size: 1rem;
+      cursor: pointer;
+      transition: background 0.3s;
+    }
+    .nav-buttons button:hover {
+      background: #00ff99;
+    }
+    .container {
+      background: rgba(0, 0, 0, 0.75);
+      border-radius: 20px;
+      padding: 30px;
+      box-shadow: 0 0 30px #00ffcc;
+      width: 90%;
+      max-width: 700px;
+      margin-bottom: 30px;
+    }
+    .section {
+      display: none;
+    }
+    .section.active {
+      display: block;
+    }
+    #status {
+      font-size: 1rem;
+      font-weight: bold;
+      color: #ff5555;
+      margin-bottom: 10px;
+      text-align: center;
+    }
+    /* Zone d'affichage pour le résultat */
+    #response {
+      font-size: 1.2rem;
+      margin-top: 20px;
+      text-align: center;
+      min-height: 50px;
+    }
+    /* Styles pour la to-do list */
+    #todoList {
+      margin-top: 10px;
+    }
+    #todoList ul {
+      list-style-type: none;
+      padding-left: 0;
+    }
+    #todoList li {
+      background: rgba(0,255,204,0.2);
+      margin: 5px 0;
+      padding: 8px;
+      border-radius: 4px;
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1>Jarvis Futuriste</h1>
+    <div id="status">En écoute…</div>
+  </div>
+  
+  <div class="nav-buttons">
+    <button onclick="showSection('accueil')">Accueil</button>
+    <button onclick="showSection('todo')">Liste de Tâches</button>
+  </div>
+
+  <div class="container">
+    <!-- Section Accueil / Recherche -->
+    <div id="accueil" class="section active">
+      <p>Bonjour ! Je suis Jarvis, votre assistant d’études.</p>
+      <p>Vous pouvez me parler pour lancer une recherche (ex : "salut jarvis quelle est la capitale de la france") ou ajouter une tâche ("ajoute tâche [votre tâche]").</p>
+      <p>Essayez par exemple de dire <em>"comment vas-tu"</em> ou <em>"bonjour jarvis"</em>.</p>
+    </div>
+    
+    <!-- Section To-Do List -->
+    <div id="todo" class="section">
+      <h2>Liste de Tâches</h2>
+      <input type="text" id="newTask" placeholder="Entrez une nouvelle tâche…" />
+      <button onclick="addTask()">Ajouter</button>
+      <div id="todoList"></div>
+    </div>
+    
+    <!-- Zone pour afficher le résultat de la commande -->
+    <div id="response"></div>
+  </div>
+
+  <script>
+    /***** BASE DE CONNAISSANCES LOCALE *****/
+    const baseDeConnaissances = {
+      "quelle est la capitale de la france": "La capitale de la France est Paris.",
+      "qui est le premier président des états unis": "Le premier président des États-Unis est George Washington.",
+      "quelle est la formule de l'eau": "La formule de l'eau est H2O.",
+      "combien font 7 fois 8": "7 multiplié par 8 font 56.",
+      // Ajoutez d'autres questions/réponses ici...
+    };
+
+    /***** VARIABLES GLOBALES ET INITIALISATIONS *****/
+    // Historique local (enregistré dans localStorage mais non affiché)
+    let history = JSON.parse(localStorage.getItem("jarvisHistory") || "[]");
+    // To-do list
+    let tasks = JSON.parse(localStorage.getItem("jarvisTasks") || "[]");
+
+    function saveHistory() { localStorage.setItem("jarvisHistory", JSON.stringify(history)); }
+    function saveTasks() { localStorage.setItem("jarvisTasks", JSON.stringify(tasks)); }
+    
+    /***** NAVIGATION ENTRE LES SECTIONS *****/
+    function showSection(sectionID) {
+      document.querySelectorAll(".section").forEach(sec => sec.classList.remove("active"));
+      document.getElementById(sectionID).classList.add("active");
+    }
+    
+    /***** FONCTIONS TO-DO LIST *****/
+    function addTask() {
+      const input = document.getElementById("newTask");
+      const taskText = input.value.trim();
+      if (taskText) {
+        tasks.push(taskText);
+        input.value = "";
+        updateTodoDisplay();
+        saveTasks();
+        respondVoice(`Tâche ajoutée : ${taskText}`);
+        addToHistory(`Ajout de tâche: ${taskText}`);
+      }
+    }
+    function removeTask(index) {
+      const removed = tasks.splice(index, 1);
+      updateTodoDisplay();
+      saveTasks();
+      respondVoice(`Tâche supprimée : ${removed}`);
+      addToHistory(`Suppression de tâche: ${removed}`);
+    }
+    function updateTodoDisplay() {
+      const container = document.getElementById("todoList");
+      container.innerHTML = "";
+      if (!tasks.length) {
+        container.textContent = "Aucune tâche pour le moment.";
+        return;
+      }
+      const ul = document.createElement("ul");
+      tasks.forEach((task, index) => {
+        const li = document.createElement("li");
+        li.textContent = task;
+        const btn = document.createElement("button");
+        btn.textContent = "Supprimer";
+        btn.style.marginLeft = "10px";
+        btn.onclick = () => { removeTask(index); };
+        li.appendChild(btn);
+        ul.appendChild(li);
+      });
+      container.appendChild(ul);
+    }
+    updateTodoDisplay();
+    
+    /***** MÉMOIRE / HISTORIQUE DES COMMANDES (stocké en local, non affiché) *****/
+    function addToHistory(command) {
+      const timestamp = new Date().toLocaleTimeString("fr-FR");
+      const entry = `[${timestamp}] ${command}`;
+      history.push(entry);
+      saveHistory();
+    }
+    
+    /***** RECONNAISSANCE ET SYNTHÈSE VOCALE *****/
+    const SpeechRecog = window.SpeechRecognition || window.webkitSpeechRecognition;
+    let recognition;
+    const statusEl = document.getElementById("status");
+    const responseEl = document.getElementById("response");
+    
+    if (SpeechRecog) {
+      recognition = new SpeechRecog();
+      recognition.lang = "fr-FR";
+      recognition.interimResults = false;
+      recognition.maxAlternatives = 1;
+      recognition.continuous = true;
+      
+      recognition.onstart = () => {
+        statusEl.textContent = "Écoute…";
+      };
+      recognition.onerror = (event) => {
+        console.error("Erreur de reconnaissance vocale :", event.error);
+        statusEl.textContent = "Erreur d'écoute";
+      };
+      recognition.onresult = (event) => {
+        for (let i = event.resultIndex; i < event.results.length; i++) {
+          let transcript = event.results[i][0].transcript.toLowerCase().trim();
+          console.log("Commande vocale :", transcript);
+          addToHistory(`Commande vocale: ${transcript}`);
+          
+          // Ouvre la to-do list
+          if (transcript.includes("liste de tâches") || transcript.includes("to do list")) {
+            showSection("todo");
+            respondVoice("Ouverture de la liste de tâches");
+          }
+          // Ajoute une tâche (commande : "ajoute tâche ...")
+          else if (transcript.startsWith("ajoute tâche")) {
+            let task = transcript.replace("ajoute tâche", "").trim();
+            if (task) {
+              tasks.push(task);
+              saveTasks();
+              updateTodoDisplay();
+              respondVoice(`Tâche ajoutée : ${task}`);
+              addToHistory(`Tâche ajoutée via voix: ${task}`);
+            }
+          }
+          // Commande de recherche ; recherche dans la base de connaissances locale
+          else if (transcript.includes("salut jarvis") || transcript.includes("recherche")) {
+            showSection("accueil");
+            // Extrait la question en retirant la commande initiale
+            let query = transcript.replace("salut jarvis", "").replace("recherche", "").trim();
+            if (query) {
+              // Recherche une correspondance exacte dans la base de connaissances locale
+              let result = baseDeConnaissances[query];
+              if (result) {
+                respondWithResult(result, `Recherche de "${query}" retournant: ${result}`);
+              } else {
+                // Si aucune correspondance n'est trouvée, renvoie un message d'erreur
+                respondWithResult("Désolé, je n'ai pas trouvé de résultat pour cette question.", `Recherche de "${query}" sans résultat.`);
+              }
+            } else {
+              respondWithResult("Veuillez formuler votre question.", "Aucune question formulée.");
+            }
+          }
+          // Commande d'accueil/salutations ("bonjour jarvis" ou "accueil")
+          else if (transcript.includes("bonjour jarvis") || transcript.includes("accueil")) {
+            showSection("accueil");
+            respondVoice("Bonjour, comment puis-je vous aider dans vos études ?");
+          }
+          // Répond à "comment vas-tu" ou "ça va"
+          else if (transcript.includes("comment vas") || transcript.includes("ça va")) {
+            const rep = "Je vais bien, merci. Et vous ?";
+            respondVoice(rep);
+            addToHistory(`Réponse: ${rep}`);
+          }
+          // Commande pour supprimer l'historique
+          else if (transcript.includes("supprime l'historique") || transcript.includes("efface l'historique")) {
+            history = [];
+            saveHistory();
+            respondVoice("L'historique a été supprimé");
+          }
+        }
+      };
+      recognition.onend = () => {
+        statusEl.textContent = "Écoute…";
+        recognition.start();
+      };
+      recognition.start();
+    } else {
+      statusEl.textContent = "Reconnaissance vocale non supportée";
+      alert("La reconnaissance vocale n'est pas supportée par votre navigateur.");
+    }
+    
+    /***** FONCTION POUR AFFICHER LE RÉSULTAT AVEC DÉLAI *****/
+    // Affiche le message vocal (déjà prononcé) dans une grande taille après 4 secondes,
+    // le maintient pendant 4 secondes, puis efface le résultat
+    function respondWithResult(message, historyLog) {
+      // Ajoute cet événement à l'historique local
+      addToHistory(historyLog);
+      respondVoice(message); // Lance la synthèse vocale
+
+      // Délai de 4 secondes avant d'afficher le résultat
+      setTimeout(() => {
+        responseEl.innerHTML = `<div style="font-size: 3em; text-align: center;">${message}</div>`;
+        // Affichage pendant 4 secondes, puis effacement
+        setTimeout(() => {
+          responseEl.textContent = "";
+        }, 4000);
+      }, 4000);
+    }
+    
+    /***** SYNTHÈSE VOCALE - VOIX NATURELLE *****/
+    let selectedVoice = null;
+    function loadVoices() {
+      const voices = window.speechSynthesis.getVoices();
+      selectedVoice = voices.find(v => v.lang.startsWith("fr") && v.name.toLowerCase().includes("google")) ||
+                      voices.find(v => v.lang.startsWith("fr")) ||
+                      voices[0];
+    }
+    window.speechSynthesis.onvoiceschanged = loadVoices;
+    loadVoices();
+    
+    function respondVoice(message) {
+      const utterance = new SpeechSynthesisUtterance(message);
+      utterance.lang = "fr-FR";
+      utterance.pitch = 1;
+      utterance.rate = 1;
+      if (selectedVoice) { 
+        utterance.voice = selectedVoice; 
+      }
+      window.speechSynthesis.speak(utterance);
+      // Affichage immédiat dans la zone réponse (sera remplacé par l'affichage en grand si c'est une recherche)
+      responseEl.textContent = message;
+    }
+  </script>
+</body>
+</html>
